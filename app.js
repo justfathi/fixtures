@@ -7,6 +7,7 @@
 const API_BASE = 'https://mc-api.dribl.com/api';
 const TENANT   = 'w8zdBWPmBX'; // Football Victoria
 const TIMEZONE = 'Australia/Sydney';
+const FAV_KEY  = 'dribl-fixtures-favs';
 
 let allClubs      = [];
 let currentSeason = null;
@@ -48,6 +49,7 @@ async function bootstrap() {
 }
 
 const ready = bootstrap();
+resetUI();
 
 // ─── Search input ─────────────────────────────────────────────────
 searchInput.addEventListener('input', () => {
@@ -75,13 +77,7 @@ async function showClubSuggestions(query) {
   const matches = allClubs.filter(c => c.name.toLowerCase().includes(ql)).slice(0, 12);
 
   if (matches.length === 0) {
-    resultsEl.innerHTML = `
-      <div class="no-results">
-        <div style="font-size:32px;margin-bottom:12px;">🔍</div>
-        <p>No clubs found for <strong>"${escHtml(query)}"</strong></p>
-        <p style="margin-top:8px;font-size:13px;color:#64748b;">Try a partial name like "Port" or "Essendon"</p>
-      </div>`;
-    return;
+    return showTeamSearch(query);
   }
 
   let html = `<div class="section-divider">Select a club (${matches.length} found)</div><div class="club-list">`;
@@ -190,8 +186,93 @@ async function selectClub(club) {
   }
 }
 
+// ─── Step 2b: Team-name search (fallback when no club matches) ───
+async function showTeamSearch(query) {
+  await ready;
+  showLoadingWith(`Searching teams for "${query}"…`);
+
+  try {
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    // Send a short prefix to the API (broad match on club/team name),
+    // then post-filter strictly with all tokens for the user's exact intent.
+    const apiQuery = tokens.slice(0, 2).join(' ');
+    const params = new URLSearchParams({
+      search:     apiQuery,
+      date_range: 'default',
+      season:     currentSeason.id,
+      tenant:     TENANT,
+      timezone:   TIMEZONE,
+    });
+    const res = await fetch(`${API_BASE}/fixtures?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const fixtures = data.data || [];
+
+    const matchesAll = (text) => {
+      const lc = text.toLowerCase();
+      return tokens.every(t => lc.includes(t));
+    };
+
+    const teamMap = {};
+    fixtures.forEach(f => {
+      const a = f.attributes;
+      [{ name: a.home_team_name, logo: a.home_logo }, { name: a.away_team_name, logo: a.away_logo }].forEach(({ name, logo }) => {
+        if (!name || !matchesAll(name)) return;
+        if (!teamMap[name]) teamMap[name] = { name, logo, count: 0, fixtures: [] };
+        teamMap[name].count++;
+        teamMap[name].fixtures.push(f);
+      });
+    });
+
+    const teams = Object.values(teamMap).sort((a, b) => a.name.localeCompare(b.name));
+
+    if (teams.length === 0) {
+      resultsEl.innerHTML = `
+        <div class="no-results">
+          <div style="font-size:32px;margin-bottom:12px;">🔍</div>
+          <p>No clubs or teams found for <strong>"${escHtml(query)}"</strong></p>
+          <p style="margin-top:8px;font-size:13px;color:#64748b;">Try a club name like "Port Melbourne" or shorter team keywords.</p>
+        </div>`;
+      return;
+    }
+
+    if (teams.length === 1) {
+      const t = teams[0];
+      showFixtures(t.fixtures, t.name, { name: t.name, logo: t.logo }, () => showTeamSearch(query));
+      return;
+    }
+
+    let html = `<div class="section-divider">Select a team (${teams.length} found)</div><div class="club-list">`;
+    teams.forEach((team, i) => {
+      html += `
+        <button class="club-card" data-team="${escHtml(team.name)}" style="animation-delay:${i*0.04}s">
+          ${team.logo
+            ? `<img class="club-logo-sm" src="${escHtml(team.logo)}" alt="" onerror="this.style.display='none'">`
+            : `<div class="club-logo-sm logo-placeholder">⚽</div>`}
+          <div class="club-name-wrap">
+            <span class="club-name">${escHtml(shortTeamName(team.name))}</span>
+            <span class="club-sub">${team.count} fixture${team.count !== 1 ? 's' : ''}</span>
+          </div>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+        </button>`;
+    });
+    html += `</div>`;
+    resultsEl.innerHTML = html;
+
+    resultsEl.querySelectorAll('.club-card[data-team]').forEach(btn => {
+      const team = teams.find(t => t.name === btn.dataset.team);
+      if (team) btn.addEventListener('click', () =>
+        showFixtures(team.fixtures, team.name, { name: team.name, logo: team.logo }, () => showTeamSearch(query))
+      );
+    });
+
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
 // ─── Step 3: Render fixtures ──────────────────────────────────────
-function showFixtures(fixtures, teamName, club) {
+function showFixtures(fixtures, teamName, club, onBack) {
   const today = new Date(); today.setHours(0,0,0,0);
   let home = 0, away = 0, byes = 0, played = 0;
 
@@ -220,6 +301,11 @@ function showFixtures(fixtures, teamName, club) {
         <h2>${escHtml(shortTeamName(teamName))}</h2>
         <div class="team-comp">${escHtml(compName)}</div>
       </div>
+      <button class="fav-btn${isFav(teamName) ? ' is-fav' : ''}" id="favBtn" aria-label="Toggle favorite" title="Save this team">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+      </button>
     </div>
     <div class="stats-bar">
       <div class="stat"><div class="stat-num">${fixtures.length}</div><div class="stat-label">Total</div></div>
@@ -291,7 +377,12 @@ function showFixtures(fixtures, teamName, club) {
 
   html += `</div>`;
   resultsEl.innerHTML = html;
-  document.getElementById('backBtn')?.addEventListener('click', () => selectClub(club));
+  document.getElementById('backBtn')?.addEventListener('click', onBack || (() => selectClub(club)));
+
+  document.getElementById('favBtn')?.addEventListener('click', (e) => {
+    const nowFav = toggleFav({ name: teamName, logo: teamLogo });
+    e.currentTarget.classList.toggle('is-fav', nowFav);
+  });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -323,6 +414,29 @@ function escHtml(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── Favorites (localStorage) ─────────────────────────────────────
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveFavs(favs) {
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch {}
+}
+
+function isFav(teamName) {
+  return loadFavs().some(f => f.name === teamName);
+}
+
+function toggleFav(team) {
+  const favs = loadFavs();
+  const i = favs.findIndex(f => f.name === team.name);
+  if (i >= 0) favs.splice(i, 1);
+  else favs.push({ name: team.name, logo: team.logo || null });
+  saveFavs(favs);
+  return i < 0; // true if it's now favorited
+}
+
 function showLoadingWith(msg) {
   resultsEl.innerHTML = `<div class="loading"><div class="spinner"></div>${escHtml(msg)}</div>`;
 }
@@ -336,9 +450,45 @@ function showError(msg) {
 }
 
 function resetUI() {
+  const favs = loadFavs();
+  let favHtml = '';
+  if (favs.length > 0) {
+    favHtml = `<div class="section-divider">⭐ Your teams</div><div class="club-list">`;
+    favs.forEach((fav, i) => {
+      favHtml += `
+        <button class="club-card" data-fav="${escHtml(fav.name)}" style="animation-delay:${i*0.04}s">
+          ${fav.logo
+            ? `<img class="club-logo-sm" src="${escHtml(fav.logo)}" alt="" onerror="this.style.display='none'">`
+            : `<div class="club-logo-sm logo-placeholder">⚽</div>`}
+          <span class="club-name">${escHtml(shortTeamName(fav.name))}</span>
+          <span class="fav-remove" data-fav-remove="${escHtml(fav.name)}" title="Remove from favorites" aria-label="Remove from favorites">✕</span>
+        </button>`;
+    });
+    favHtml += `</div>`;
+  }
+
   resultsEl.innerHTML = `
+    ${favHtml}
     <div class="empty-state">
       <div class="empty-icon">⚽</div>
-      <p>Search for a club above to see their fixtures</p>
+      <p>${favs.length ? 'Or search for another team above' : 'Search for a team above to see their fixtures'}</p>
     </div>`;
+
+  resultsEl.querySelectorAll('.club-card[data-fav]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('[data-fav-remove]')) return; // remove handled below
+      const name = btn.dataset.fav;
+      searchInput.value = name;
+      clearBtn.classList.add('visible');
+      showClubSuggestions(name);
+    });
+  });
+
+  resultsEl.querySelectorAll('[data-fav-remove]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFav({ name: el.dataset.favRemove });
+      resetUI();
+    });
+  });
 }
