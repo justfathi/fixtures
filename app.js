@@ -147,7 +147,7 @@ async function selectClub(club) {
     const teams = Object.values(teamMap).sort((a, b) => a.name.localeCompare(b.name));
 
     if (teams.length === 1) {
-      showFixtures(teams[0].fixtures, teams[0].name, club);
+      loadAndShowFixtures(teams[0].name, club);
       return;
     }
 
@@ -178,7 +178,7 @@ async function selectClub(club) {
     document.getElementById('backBtn')?.addEventListener('click', () => showClubSuggestions(searchInput.value.trim()));
     resultsEl.querySelectorAll('.club-card[data-team]').forEach(btn => {
       const team = teams.find(t => t.name === btn.dataset.team);
-      if (team) btn.addEventListener('click', () => showFixtures(team.fixtures, team.name, club));
+      if (team) btn.addEventListener('click', () => loadAndShowFixtures(team.name, club));
     });
 
   } catch (err) {
@@ -197,12 +197,11 @@ async function showTeamSearch(query) {
     // then post-filter strictly with all tokens for the user's exact intent.
     const apiQuery = tokens.slice(0, 2).join(' ');
     const params = new URLSearchParams({
-      search:        apiQuery,
-      date_range:    'season',
-      disable_paging:'true',
-      season:        currentSeason.id,
-      tenant:        TENANT,
-      timezone:      TIMEZONE,
+      search:     apiQuery,
+      date_range: 'default',
+      season:     currentSeason.id,
+      tenant:     TENANT,
+      timezone:   TIMEZONE,
     });
     const res = await fetch(`${API_BASE}/fixtures?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -239,7 +238,7 @@ async function showTeamSearch(query) {
 
     if (teams.length === 1) {
       const t = teams[0];
-      showFixtures(t.fixtures, t.name, { name: t.name, logo: t.logo }, () => showTeamSearch(query));
+      loadAndShowFixtures(t.name, { name: t.name, logo: t.logo }, () => showTeamSearch(query));
       return;
     }
 
@@ -263,10 +262,38 @@ async function showTeamSearch(query) {
     resultsEl.querySelectorAll('.club-card[data-team]').forEach(btn => {
       const team = teams.find(t => t.name === btn.dataset.team);
       if (team) btn.addEventListener('click', () =>
-        showFixtures(team.fixtures, team.name, { name: team.name, logo: team.logo }, () => showTeamSearch(query))
+        loadAndShowFixtures(team.name, { name: team.name, logo: team.logo }, () => showTeamSearch(query))
       );
     });
 
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+// ─── Step 2.5: Refetch full fixture list for a single team ───────
+// The candidate fetches above are capped at ~30 results across many
+// teams, so a specific team can have most of its season missing.
+// Re-search with the canonical team name to get all of it (Dribl's
+// own frontend uses this pattern).
+async function loadAndShowFixtures(teamName, club, onBack) {
+  showLoadingWith(`Loading fixtures for ${shortTeamName(teamName)}…`);
+  try {
+    const params = new URLSearchParams({
+      search:     teamName,
+      date_range: 'default',
+      season:     currentSeason.id,
+      tenant:     TENANT,
+      timezone:   TIMEZONE,
+    });
+    const res = await fetch(`${API_BASE}/fixtures?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const fixtures = (data.data || []).filter(f => {
+      const a = f.attributes;
+      return a.home_team_name === teamName || a.away_team_name === teamName;
+    });
+    showFixtures(fixtures, teamName, club, onBack);
   } catch (err) {
     showError(err.message);
   }
