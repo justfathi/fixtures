@@ -7,6 +7,7 @@
 const API_BASE = 'https://mc-api.dribl.com/api';
 const TENANT   = 'w8zdBWPmBX'; // Football Victoria
 const TIMEZONE = 'Australia/Sydney';
+const FAV_KEY  = 'dribl-fixtures-favs';
 
 let allClubs      = [];
 let currentSeason = null;
@@ -48,6 +49,7 @@ async function bootstrap() {
 }
 
 const ready = bootstrap();
+resetUI();
 
 // ─── Search input ─────────────────────────────────────────────────
 searchInput.addEventListener('input', () => {
@@ -299,6 +301,11 @@ function showFixtures(fixtures, teamName, club, onBack) {
         <h2>${escHtml(shortTeamName(teamName))}</h2>
         <div class="team-comp">${escHtml(compName)}</div>
       </div>
+      <button class="fav-btn${isFav(teamName) ? ' is-fav' : ''}" id="favBtn" aria-label="Toggle favorite" title="Save this team">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+      </button>
     </div>
     <div class="stats-bar">
       <div class="stat"><div class="stat-num">${fixtures.length}</div><div class="stat-label">Total</div></div>
@@ -371,6 +378,11 @@ function showFixtures(fixtures, teamName, club, onBack) {
   html += `</div>`;
   resultsEl.innerHTML = html;
   document.getElementById('backBtn')?.addEventListener('click', onBack || (() => selectClub(club)));
+
+  document.getElementById('favBtn')?.addEventListener('click', (e) => {
+    const nowFav = toggleFav({ name: teamName, logo: teamLogo });
+    e.currentTarget.classList.toggle('is-fav', nowFav);
+  });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -402,6 +414,29 @@ function escHtml(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── Favorites (localStorage) ─────────────────────────────────────
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveFavs(favs) {
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch {}
+}
+
+function isFav(teamName) {
+  return loadFavs().some(f => f.name === teamName);
+}
+
+function toggleFav(team) {
+  const favs = loadFavs();
+  const i = favs.findIndex(f => f.name === team.name);
+  if (i >= 0) favs.splice(i, 1);
+  else favs.push({ name: team.name, logo: team.logo || null });
+  saveFavs(favs);
+  return i < 0; // true if it's now favorited
+}
+
 function showLoadingWith(msg) {
   resultsEl.innerHTML = `<div class="loading"><div class="spinner"></div>${escHtml(msg)}</div>`;
 }
@@ -415,9 +450,45 @@ function showError(msg) {
 }
 
 function resetUI() {
+  const favs = loadFavs();
+  let favHtml = '';
+  if (favs.length > 0) {
+    favHtml = `<div class="section-divider">⭐ Your teams</div><div class="club-list">`;
+    favs.forEach((fav, i) => {
+      favHtml += `
+        <button class="club-card" data-fav="${escHtml(fav.name)}" style="animation-delay:${i*0.04}s">
+          ${fav.logo
+            ? `<img class="club-logo-sm" src="${escHtml(fav.logo)}" alt="" onerror="this.style.display='none'">`
+            : `<div class="club-logo-sm logo-placeholder">⚽</div>`}
+          <span class="club-name">${escHtml(shortTeamName(fav.name))}</span>
+          <span class="fav-remove" data-fav-remove="${escHtml(fav.name)}" title="Remove from favorites" aria-label="Remove from favorites">✕</span>
+        </button>`;
+    });
+    favHtml += `</div>`;
+  }
+
   resultsEl.innerHTML = `
+    ${favHtml}
     <div class="empty-state">
       <div class="empty-icon">⚽</div>
-      <p>Search for a club above to see their fixtures</p>
+      <p>${favs.length ? 'Or search for another team above' : 'Search for a team above to see their fixtures'}</p>
     </div>`;
+
+  resultsEl.querySelectorAll('.club-card[data-fav]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('[data-fav-remove]')) return; // remove handled below
+      const name = btn.dataset.fav;
+      searchInput.value = name;
+      clearBtn.classList.add('visible');
+      showClubSuggestions(name);
+    });
+  });
+
+  resultsEl.querySelectorAll('[data-fav-remove]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFav({ name: el.dataset.favRemove });
+      resetUI();
+    });
+  });
 }
