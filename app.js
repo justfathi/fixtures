@@ -197,11 +197,12 @@ async function showTeamSearch(query) {
     // then post-filter strictly with all tokens for the user's exact intent.
     const apiQuery = tokens.slice(0, 2).join(' ');
     const params = new URLSearchParams({
-      search:     apiQuery,
-      date_range: 'default',
-      season:     currentSeason.id,
-      tenant:     TENANT,
-      timezone:   TIMEZONE,
+      search:        apiQuery,
+      date_range:    'season',
+      disable_paging:'true',
+      season:        currentSeason.id,
+      tenant:        TENANT,
+      timezone:      TIMEZONE,
     });
     const res = await fetch(`${API_BASE}/fixtures?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
