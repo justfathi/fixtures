@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soccer Fixtures · Football Victoria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<div class="container">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <img src="https://ocean.dribl.com/68f962dcac514bf1ad1abfb86e0c71da" alt="Football Victoria" class="fv-logo" onerror="this.style.display='none'">
+      <div class="header-text">
+        <h1>Soccer <span>Fixtures</span></h1>
+        <p class="tagline">Football Victoria · 2026 Season</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Search -->
+  <div class="search-section">
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Search for your team, club or competition…"
+        autocomplete="off"
+        spellcheck="false"
+        value="Port Melbourne SC U09 MiniRoos - Wallabies Female"
+      >
+      <button class="clear-btn" id="clearBtn" aria-label="Clear search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="search-hint" id="searchHint">
+      Type a club name — e.g. "Port Melbourne", "Essendon", "South Melbourne"…
+    </div>
+  </div>
+
+  <!-- Results area -->
+  <div id="results">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">⚽</div>
+      <p>Search for a team above to see their fixtures</p>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <p>Data from <a href="https://fv.dribl.com" target="_blank" rel="noopener">fv.dribl.com</a> · Football Victoria 2026 ·
+  <a href="https://github.com/yourusername/dribl-fixtures" target="_blank" rel="noopener">View on GitHub</a></p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
