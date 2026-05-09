@@ -357,7 +357,7 @@ function showFixtures(fixtures, teamName, club, onBack) {
     const isPast = d < today;
     const isNext = !nextFound && !isPast && !a.bye_flag;
     if (isNext) nextFound = true;
-    const { dayNum, dowStr, monStr } = formatDate(d);
+    const { dayNum, dowStr, monStr, timeStr } = formatDate(d);
     const isHome  = a.home_team_name === teamName;
     const mapsUrl = a.ground_latitude ? `https://www.google.com/maps?q=${a.ground_latitude},${a.ground_longitude}` : null;
 
@@ -403,6 +403,7 @@ function showFixtures(fixtures, teamName, club, onBack) {
           <div class="date-col">
             <div class="date-num">${dayNum}</div>
             <div class="date-sub">${dowStr} ${monStr}</div>
+            <div class="date-time">${timeStr}</div>
           </div>
           <div class="tags-col"><span class="tag ${tagClass}">${tagLabel}</span></div>
         </div>
@@ -441,7 +442,8 @@ function shortTeamName(name) {
 function formatDate(d) {
   const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return { dayNum: d.getDate(), dowStr: DAYS[d.getDay()], monStr: MONTHS[d.getMonth()] };
+  const timeStr = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TIMEZONE });
+  return { dayNum: d.getDate(), dowStr: DAYS[d.getDay()], monStr: MONTHS[d.getMonth()], timeStr };
 }
 
 function escHtml(str) {

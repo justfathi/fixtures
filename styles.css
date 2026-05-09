@@ -457,6 +457,13 @@ h1 span { color: var(--gold); }
   font-weight: 600;
 }
 
+.date-time {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 .tags-col {
   display: flex;
   flex-direction: column;
